@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,7 +67,7 @@ def main() -> None:
             provider_name=args.provider,
             model=args.model,
         )
-        print(stable_json(summary.__dict__))
+        print(stable_json(asdict(summary)))
         return
 
     if args.command == "run":
@@ -76,7 +77,7 @@ def main() -> None:
             model=args.model,
             max_rows=args.max_rows,
         )
-        print(stable_json(summary.__dict__))
+        print(stable_json(asdict(summary)))
         return
 
     if args.command == "inspect":

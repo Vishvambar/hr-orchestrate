@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from math import log
-import re
 
 from .contracts import Chunk, RetrievalHit
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_NORMALIZE_MAP = {
+    "charged": "charge",
+    "charges": "charge",
+    "charging": "charge",
+    "twice": "duplicate",
+    "parcel": "package",
+    "moved": "movement",
+    "moving": "movement",
+    "delays": "delay",
+}
+
+
+def _normalize_token(token: str) -> str:
+    if token in _NORMALIZE_MAP:
+        return _NORMALIZE_MAP[token]
+    if token.endswith("s") and len(token) > 4 and not token.endswith("ss"):
+        return token[:-1]
+    return token
 
 
 def tokenize(text: str) -> list[str]:
-    return _TOKEN_RE.findall(text.lower())
+    return [_normalize_token(token) for token in _TOKEN_RE.findall(text.lower())]
 
 
 @dataclass(slots=True)
@@ -27,7 +45,7 @@ class LexicalIndex:
         document_frequency: Counter[str] = Counter()
         total_length = 0
         for chunk in chunks:
-            tokens = tokenize(chunk.text)
+            tokens = tokenize(f"{chunk.title} {chunk.source_path} {chunk.text}")
             frequencies = Counter(tokens)
             term_frequencies.append(frequencies)
             total_length += len(tokens)
@@ -41,7 +59,9 @@ class LexicalIndex:
             average_length=average_length,
         )
 
-    def search(self, query: str, *, top_k: int = 5, min_score: float = 0.0) -> list[RetrievalHit]:
+    def search(
+        self, query: str, *, top_k: int = 5, min_score: float = 0.0
+    ) -> list[RetrievalHit]:
         query_tokens = tokenize(query)
         if not query_tokens:
             return []
@@ -61,7 +81,9 @@ class LexicalIndex:
                 df = self.document_frequency.get(term, 0)
                 idf = log(((total_docs - df + 0.5) / (df + 0.5)) + 1.0)
                 numerator = tf * (k1 + 1.0)
-                denominator = tf + k1 * (1.0 - b + b * (chunk_length / self.average_length))
+                denominator = tf + k1 * (
+                    1.0 - b + b * (chunk_length / self.average_length)
+                )
                 score += q_freq * idf * (numerator / denominator)
             if score >= min_score:
                 hits.append(

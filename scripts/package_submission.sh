@@ -11,9 +11,9 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 DEST="$ROOT/submissions/$TIMESTAMP"
 mkdir -p "$DEST"
 
-LATEST_RUN=$(find "$ROOT/artifacts/runs" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1 || true)
-if [ -z "$LATEST_RUN" ]; then
-  echo "No run directory found under artifacts/runs. Run the agent first." >&2
+LATEST_RUN=$(find "$ROOT/artifacts/runs" -mindepth 1 -maxdepth 1 -type d ! -name latest | sort | tail -n 1 || true)
+if [ -z "$LATEST_RUN" ] || [ ! -f "$LATEST_RUN/manifest.json" ]; then
+  echo "No completed run directory found under artifacts/runs. Run the agent first." >&2
   exit 1
 fi
 

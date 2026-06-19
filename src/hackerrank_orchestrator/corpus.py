@@ -51,10 +51,16 @@ def load_chunks(contract: ChallengeContract) -> list[Chunk]:
         raise FileNotFoundError(f"Corpus directory not found: {corpus_dir}")
 
     chunks: list[Chunk] = []
-    for file_path in sorted(p for p in corpus_dir.rglob("*") if p.is_file() and p.suffix.lower() in _TEXT_SUFFIXES):
+    for file_path in sorted(
+        p
+        for p in corpus_dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in _TEXT_SUFFIXES
+    ):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
-        text = collapse_whitespace(text.replace("\r\n", "\n"))
+        text = text.replace("\r\n", "\n")
         title = _extract_title(file_path, text)
+        text = re.sub(r"^#\s+.*$", "", text, count=1, flags=re.MULTILINE)
+        text = collapse_whitespace(text)
         doc_id = str(file_path.relative_to(corpus_dir))
         for index, chunk_text in enumerate(
             _split_chunks(

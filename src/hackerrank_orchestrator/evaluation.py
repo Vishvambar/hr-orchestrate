@@ -6,8 +6,10 @@ from pathlib import Path
 from .utils import collapse_whitespace
 
 
-def _normalize(value: str) -> str:
-    return collapse_whitespace(value).lower()
+def _normalize(value: object) -> str:
+    if isinstance(value, list):
+        value = " ".join(str(item) for item in value)
+    return collapse_whitespace(str(value)).lower()
 
 
 def _read_rows(path: str | Path, id_column: str) -> dict[str, dict[str, str]]:

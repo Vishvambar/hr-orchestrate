@@ -93,21 +93,20 @@ def infer_product_area(
 ) -> str:
     if not allowed_values:
         return ""
-    joined = (
-        text.lower()
-        + " "
-        + " ".join(
-            f"{hit.title} {hit.source_path} {hit.text}".lower() for hit in hits[:3]
+    evidence = text.lower()
+    if hits:
+        top_hit = hits[0]
+        evidence += (
+            " " + f"{top_hit.title} {top_hit.source_path} {top_hit.text}".lower()
         )
-    )
-    joined_tokens = Counter(tokenize(joined))
+    evidence_tokens = Counter(tokenize(evidence))
 
     best_value = allowed_values[0]
     best_score = -1
     for value in allowed_values:
         tokens = tokenize(value)
-        score = sum(joined_tokens[token] for token in tokens)
-        if value.lower() in joined:
+        score = sum(evidence_tokens[token] for token in tokens)
+        if value.lower() in evidence:
             score += 3
         if score > best_score:
             best_score = score
@@ -144,13 +143,14 @@ def best_supporting_sentences(
 
 
 def best_manual_review_sentence(query: str, hits: list[RetrievalHit]) -> str | None:
-    for hit in hits[:3]:
-        for sentence in split_sentences(hit.text):
-            sentence_lower = sentence.lower()
-            if any(hint in sentence_lower for hint in _MANUAL_REVIEW_HINTS):
-                overlap = set(tokenize(query)) & set(tokenize(sentence))
-                if overlap:
-                    return sentence
+    if not hits:
+        return None
+    for sentence in split_sentences(hits[0].text):
+        sentence_lower = sentence.lower()
+        if any(hint in sentence_lower for hint in _MANUAL_REVIEW_HINTS):
+            overlap = set(tokenize(query)) & set(tokenize(sentence))
+            if overlap:
+                return sentence
     return None
 
 
@@ -166,6 +166,11 @@ def find_escalation_reasons(
 
     if not hits or hits[0].score < contract.rules.min_evidence_score:
         reasons.append("evidence was below the confidence threshold")
+
+    if any(hint in query_lower for hint in _FEATURE_HINTS):
+        top_hit_text = hits[0].text.lower() if hits else ""
+        if "feature" not in top_hit_text and "request" not in top_hit_text:
+            reasons.append("evidence was below the confidence threshold")
 
     manual_review_sentence = best_manual_review_sentence(query, hits)
     if manual_review_sentence:
@@ -255,7 +260,17 @@ def finalize_values(
             if kind == "status":
                 candidate = _status_default(field.allowed_values, escalated=escalated)
             elif kind == "product_area":
-                candidate = product_area
+                if (
+                    escalated
+                    and any(
+                        value.lower() == "general" for value in field.allowed_values
+                    )
+                    and "evidence was below the confidence threshold"
+                    in escalation_reasons
+                ):
+                    candidate = _canonical_allowed(field.allowed_values, "general")
+                else:
+                    candidate = product_area
             elif kind == "request_type":
                 candidate = request_type
             elif kind == "response":
@@ -277,7 +292,17 @@ def finalize_values(
             if kind == "status":
                 candidate = _status_default(field.allowed_values, escalated=escalated)
             elif kind == "product_area" and product_area:
-                candidate = _canonical_allowed(field.allowed_values, product_area)
+                if (
+                    escalated
+                    and any(
+                        value.lower() == "general" for value in field.allowed_values
+                    )
+                    and "evidence was below the confidence threshold"
+                    in escalation_reasons
+                ):
+                    candidate = _canonical_allowed(field.allowed_values, "general")
+                else:
+                    candidate = _canonical_allowed(field.allowed_values, product_area)
             elif kind == "request_type" and request_type:
                 candidate = _canonical_allowed(field.allowed_values, request_type)
             else:
