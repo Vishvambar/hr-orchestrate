@@ -25,28 +25,19 @@ import sys
 
 root = Path(sys.argv[1])
 out = Path(sys.argv[2])
-include = [
-    "src",
-    "configs",
-    "docs",
-    "scripts",
-    "tests",
-    "README.md",
-    "pyproject.toml",
-    "AGENTS.md",
-    ".env.example",
-    "Makefile",
-]
+code_dir = root / "code"
+if not code_dir.exists():
+    raise SystemExit("code/ directory not found. Cannot build submission zip.")
+
 with ZipFile(out, "w", compression=ZIP_DEFLATED) as zf:
-    for item in include:
-        path = root / item
-        if not path.exists():
+    for sub in sorted(p for p in code_dir.rglob("*") if p.is_file()):
+        if "__pycache__" in sub.parts or ".orchestrate_image_cache" in sub.parts:
             continue
-        if path.is_dir():
-            for sub in sorted(p for p in path.rglob("*") if p.is_file()):
-                zf.write(sub, sub.relative_to(root))
-        else:
-            zf.write(path, path.relative_to(root))
+        if sub.name == ".env" or sub.name.endswith(".env"):
+            continue
+        if sub.suffix in {".pyc", ".pyo"}:
+            continue
+        zf.write(sub, sub.relative_to(root))
 PY
 
 cp "$LATEST_RUN/output.csv" "$DEST/output.csv"

@@ -11,7 +11,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
-
+evaluation/reference/
 artifacts/runs/*
 !artifacts/runs/.gitkeep
 artifacts/notes/*
@@ -22,3 +22,4 @@ challenge/archive/*
 !challenge/archive/.gitkeep
 challenge/current/*
 !challenge/current/README.md
+!challenge/current/*.toml

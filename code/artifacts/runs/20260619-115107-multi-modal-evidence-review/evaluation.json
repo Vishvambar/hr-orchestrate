@@ -1,0 +1,81 @@
+{
+  "compared_rows": 4,
+  "exact_accuracy": {
+    "claim_object": 1.0,
+    "claim_status": 0.5,
+    "claim_status_justification": 0.0,
+    "evidence_standard_met": 0.5,
+    "evidence_standard_met_reason": 0.0,
+    "image_paths": 0.0,
+    "issue_type": 0.0,
+    "object_part": 0.5,
+    "risk_flags": 0.25,
+    "severity": 0.25,
+    "supporting_image_ids": 0.0,
+    "user_claim": 0.0,
+    "user_id": 0.5,
+    "valid_image": 0.75
+  },
+  "exact_matches": {
+    "claim_object": 4,
+    "claim_status": 2,
+    "claim_status_justification": 0,
+    "evidence_standard_met": 2,
+    "evidence_standard_met_reason": 0,
+    "image_paths": 0,
+    "issue_type": 0,
+    "object_part": 2,
+    "risk_flags": 1,
+    "severity": 1,
+    "supporting_image_ids": 0,
+    "user_claim": 0,
+    "user_id": 2,
+    "valid_image": 3
+  },
+  "expected_rows": 20,
+  "normalized_accuracy": {
+    "claim_object": 1.0,
+    "claim_status": 0.5,
+    "claim_status_justification": 0.0,
+    "evidence_standard_met": 0.5,
+    "evidence_standard_met_reason": 0.0,
+    "image_paths": 0.0,
+    "issue_type": 0.0,
+    "object_part": 0.5,
+    "risk_flags": 0.25,
+    "severity": 0.25,
+    "supporting_image_ids": 0.0,
+    "user_claim": 0.0,
+    "user_id": 0.5,
+    "valid_image": 0.75
+  },
+  "normalized_matches": {
+    "claim_object": 4,
+    "claim_status": 2,
+    "claim_status_justification": 0,
+    "evidence_standard_met": 2,
+    "evidence_standard_met_reason": 0,
+    "image_paths": 0,
+    "issue_type": 0,
+    "object_part": 2,
+    "risk_flags": 1,
+    "severity": 1,
+    "supporting_image_ids": 0,
+    "user_claim": 0,
+    "user_id": 2,
+    "valid_image": 3
+  },
+  "overall_normalized_accuracy": 0.3036,
+  "predicted_rows": 4,
+  "row_count_match": false,
+  "row_identity_mismatches": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "set_columns": [
+    "risk_flags",
+    "supporting_image_ids"
+  ]
+}
