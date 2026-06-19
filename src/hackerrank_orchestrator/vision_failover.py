@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from .image_utils import (
     build_openai_compatible_image_content,
     guess_mime_type,
+    image_id_from_path,
     normalize_image_for_api,
 )
 
@@ -73,6 +74,7 @@ class OpenAICompatibleVisionProvider:
     timeout_seconds: float = 20.0
     max_tokens: int = 1200
     default_headers: dict[str, str] | None = None
+    image_detail: str = "auto"
 
     def configured_model(self) -> str:
         return os.getenv(self.model_env, self.default_model)
@@ -107,7 +109,7 @@ class OpenAICompatibleVisionProvider:
             {
                 "role": "user",
                 "content": build_openai_compatible_image_content(
-                    prompt_text, image_paths
+                    prompt_text, image_paths, image_detail=self.image_detail
                 ),
             }
         ]
@@ -233,6 +235,12 @@ class GeminiVisionProvider:
         parts: list[dict[str, Any]] = [{"text": prompt_text}]
         for image_path in image_paths:
             normalized_path = normalize_image_for_api(image_path)
+            image_id = image_id_from_path(image_path)
+            parts.append(
+                {
+                    "text": f"Image ID: {image_id}. Use this exact ID when this image supports the decision."
+                }
+            )
             parts.append(
                 {
                     "inline_data": {
@@ -340,6 +348,106 @@ class GeminiVisionProvider:
 
 
 @dataclass(slots=True)
+class GroqVisionProvider:
+    name: str
+    model: str
+    api_key_env: str = "GROQ_API_KEY"
+    timeout_seconds: float = 25.0
+    max_tokens: int = 1200
+    image_detail: str = "auto"
+
+    def configured_model(self) -> str:
+        return self.model
+
+    def review_json(
+        self,
+        prompt_text: str,
+        image_paths: list[Path],
+    ) -> VisionReviewResult:
+        try:
+            from groq import Groq
+        except ImportError as exc:
+            raise VisionProviderError(
+                "Groq SDK is required for Groq vision providers. Run: pip install groq"
+            ) from exc
+
+        api_key = os.getenv(self.api_key_env)
+        if not api_key:
+            raise VisionProviderError(f"{self.api_key_env} is not set.")
+
+        client = Groq(api_key=api_key)
+        started = time.perf_counter()
+        
+        # Format images
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
+        for image_path in image_paths:
+            normalized_path = normalize_image_for_api(image_path)
+            image_id = image_id_from_path(image_path)
+            content_parts.append({"type": "text", "text": f"Image ID: {image_id}. Use this exact ID when this image supports the decision."})
+            
+            mime_type = guess_mime_type(normalized_path)
+            b64 = base64.b64encode(normalized_path.read_bytes()).decode("ascii")
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{b64}"
+                }
+            })
+
+        messages = [
+            {
+                "role": "user",
+                "content": content_parts,
+            }
+        ]
+
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,
+                max_completion_tokens=self.max_tokens,
+                timeout=self.timeout_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise VisionProviderError(str(exc)) from exc
+
+        content = response.choices[0].message.content or "{}"
+        
+        # Robust Parsing: Strip <think> tags completely before parsing
+        cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        
+        try:
+            parsed = _parse_json_object(cleaned_content)
+        except VisionProviderError as exc:
+             raise VisionProviderError(f"Groq returned invalid JSON after cleaning: {cleaned_content[:300]}") from exc
+
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+        completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+        latency_seconds = time.perf_counter() - started
+        
+        return VisionReviewResult(
+            parsed=parsed,
+            provider=self.name,
+            model=self.model,
+            raw_text=content,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            attempts=[
+                VisionAttempt(
+                    provider=self.name,
+                    model=self.model,
+                    success=True,
+                    latency_seconds=round(latency_seconds, 3),
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    image_count=len(image_paths),
+                )
+            ],
+        )
+
+@dataclass(slots=True)
 class SequentialVisionRouter:
     providers: list[VisionProvider]
     cooldown_seconds: float = 15.0
@@ -409,14 +517,52 @@ def _parse_json_object(content: str) -> dict[str, Any]:
     cleaned = _clean_json_content(content)
     try:
         parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
-        start = cleaned.find("{")
+        pass
+
+    start = cleaned.find("{")
+    if start == -1:
+        raise VisionProviderError("Vision model response did not contain valid JSON.")
+
+    brace_count = 0
+    in_string = False
+    escape = False
+    end = -1
+    for i in range(start, len(cleaned)):
+        char = cleaned[i]
+        if escape:
+            escape = False
+            continue
+        if char == '\\':
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+            
+        if not in_string:
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end = i
+                    break
+
+    if end == -1:
+        # Fallback to last } if brace counting fails due to malformed inner JSON
         end = cleaned.rfind("}")
-        if start == -1 or end == -1:
-            raise VisionProviderError(
-                "Vision model response did not contain valid JSON."
-            )
+        
+    if start == -1 or end == -1:
+        raise VisionProviderError("Vision model response did not contain a complete JSON object.")
+        
+    try:
         parsed = json.loads(cleaned[start : end + 1])
+    except json.JSONDecodeError as exc:
+        raise VisionProviderError(f"Vision model response contained invalid JSON: {exc}") from exc
+        
     if not isinstance(parsed, dict):
         raise VisionProviderError("Vision model response JSON was not an object.")
     return parsed
@@ -424,6 +570,21 @@ def _parse_json_object(content: str) -> dict[str, Any]:
 
 def make_sequential_vision_router(*, max_tokens: int = 1200) -> SequentialVisionRouter:
     available: dict[str, VisionProvider] = {}
+    image_detail = os.getenv("ORCH_IMAGE_DETAIL", "auto")
+
+    if os.getenv("GROQ_API_KEY"):
+        available["groq_qwen"] = GroqVisionProvider(
+            name="groq_qwen",
+            model="qwen/qwen3.6-27b",
+            max_tokens=max_tokens,
+            image_detail=image_detail,
+        )
+        available["groq_llama"] = GroqVisionProvider(
+            name="groq_llama",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            max_tokens=max_tokens,
+            image_detail=image_detail,
+        )
 
     if os.getenv("GITHUB_TOKEN"):
         available["github_models"] = OpenAICompatibleVisionProvider(
@@ -433,6 +594,7 @@ def make_sequential_vision_router(*, max_tokens: int = 1200) -> SequentialVision
             base_url="https://models.github.ai/inference",
             default_model="gpt-4o",
             max_tokens=max_tokens,
+            image_detail=image_detail,
         )
     if os.getenv("GEMINI_API_KEY"):
         available["gemini"] = GeminiVisionProvider(
@@ -452,6 +614,7 @@ def make_sequential_vision_router(*, max_tokens: int = 1200) -> SequentialVision
             default_model="openai/gpt-4o-mini",
             max_tokens=max_tokens,
             default_headers=headers or None,
+            image_detail=image_detail,
         )
 
     order = [

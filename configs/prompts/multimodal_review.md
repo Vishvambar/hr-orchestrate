@@ -30,4 +30,6 @@ Constraints:
 - `supporting_image_ids` must be an array of image IDs or ["none"]
 - `claim_status` must be one of supported, contradicted, not_enough_information
 - `valid_image` and `evidence_standard_met` must be booleans
-- Ground the decision in visible evidence from the images
+- Cross-reference evidence_requirements against the images to evaluate evidence_standard_met.
+- Check for consistency across all provided images (e.g. same vehicle).
+- Ground the decision in visible evidence from the images.

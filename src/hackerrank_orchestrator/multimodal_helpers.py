@@ -185,6 +185,13 @@ def history_risk_flags(history_row: dict[str, str] | None) -> list[str]:
         or rejected_claim >= 2
     ):
         flags.append("user_history_risk")
-    if history_row.get("history_flags"):
+    raw_history_flags = [
+        part.strip().lower()
+        for part in history_row.get("history_flags", "").split(";")
+        if part.strip() and part.strip().lower() != "none"
+    ]
+    if "user_history_risk" in raw_history_flags:
+        flags.append("user_history_risk")
+    if "manual_review_required" in raw_history_flags:
         flags.append("manual_review_required")
     return sorted(dict.fromkeys(flags))

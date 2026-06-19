@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import mimetypes
+import os
 from pathlib import Path
 
 
@@ -43,6 +44,7 @@ def guess_mime_type(path_like: str | Path) -> str:
 
 def normalize_image_for_api(path_like: str | Path) -> Path:
     """Return an API-supported image path, converting AVIF/mislabeled files to JPEG.
+    Automatically downscales images larger than 2MB to prevent 413 Payload Too Large errors.
 
     Some challenge files have a `.jpg` extension but contain AVIF bytes. Several
     OpenAI-compatible vision APIs reject those even when the extension says JPG.
@@ -51,13 +53,20 @@ def normalize_image_for_api(path_like: str | Path) -> Path:
     """
     path = Path(path_like)
     mime = guess_mime_type(path)
-    if mime in SUPPORTED_API_MIME_TYPES:
+    
+    file_size = path.stat().st_size
+    needs_resize = file_size > 2 * 1024 * 1024  # 2MB threshold
+
+    if mime in SUPPORTED_API_MIME_TYPES and not needs_resize:
         return path
 
     cache_dir = path.parent / ".orchestrate_image_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
-    converted = cache_dir / f"{path.stem}-{digest}.jpg"
+    
+    filename = f"{path.stem}-{digest}-resized.jpg" if needs_resize else f"{path.stem}-{digest}.jpg"
+    converted = cache_dir / filename
+    
     if converted.exists():
         return converted
 
@@ -72,7 +81,12 @@ def normalize_image_for_api(path_like: str | Path) -> Path:
 
     with Image.open(path) as image:
         image = image.convert("RGB")
-        image.save(converted, format="JPEG", quality=92, optimize=True)
+        if needs_resize:
+            image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        
+        quality = 85 if needs_resize else 92
+        image.save(converted, format="JPEG", quality=quality, optimize=True)
+        
     return converted
 
 
@@ -85,13 +99,28 @@ def image_to_data_url(path_like: str | Path) -> str:
 def build_openai_compatible_image_content(
     prompt_text: str,
     image_paths: list[str | Path],
+    *,
+    image_detail: str | None = None,
 ) -> list[dict[str, object]]:
+    detail = (image_detail or os.getenv("ORCH_IMAGE_DETAIL", "auto")).strip().lower()
+    if detail not in {"low", "high", "auto"}:
+        detail = "auto"
+
     content: list[dict[str, object]] = [{"type": "text", "text": prompt_text}]
     for image_path in image_paths:
+        image_id = image_id_from_path(image_path)
+        content.append(
+            {
+                "type": "text",
+                "text": f"Image ID: {image_id}. Use this exact ID when this image supports the decision.",
+            }
+        )
+        image_url: dict[str, object] = {"url": image_to_data_url(image_path)}
+        image_url["detail"] = detail
         content.append(
             {
                 "type": "image_url",
-                "image_url": {"url": image_to_data_url(image_path)},
+                "image_url": image_url,
             }
         )
     return content

@@ -11,11 +11,31 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 DEST="$ROOT/submissions/$TIMESTAMP"
 mkdir -p "$DEST"
 
-LATEST_RUN=$(find "$ROOT/artifacts/runs" -mindepth 1 -maxdepth 1 -type d ! -name latest | sort | tail -n 1 || true)
-if [ -z "$LATEST_RUN" ] || [ ! -f "$LATEST_RUN/manifest.json" ]; then
-  echo "No completed run directory found under artifacts/runs. Run the agent first." >&2
+OUTPUT_CSV="$ROOT/output.csv"
+if [ ! -f "$OUTPUT_CSV" ]; then
+  echo "output.csv not found at repo root. Run: python code/main.py" >&2
   exit 1
 fi
+
+"$PY" - "$ROOT" <<'PY'
+import csv
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+output_csv = root / "output.csv"
+claims_csv = root / "dataset" / "claims.csv"
+if claims_csv.exists():
+    expected = sum(1 for _ in csv.DictReader(claims_csv.open(newline="", encoding="utf-8")))
+    actual = sum(1 for _ in csv.DictReader(output_csv.open(newline="", encoding="utf-8")))
+    if actual != expected:
+        raise SystemExit(
+            f"output.csv has {actual} prediction rows, but dataset/claims.csv has {expected}. "
+            "Finish the run before packaging."
+        )
+PY
+
+LATEST_RUN=$(find "$ROOT/code/artifacts/runs" "$ROOT/artifacts/runs" -mindepth 1 -maxdepth 1 -type d ! -name latest 2>/dev/null | sort | tail -n 1 || true)
 
 CODE_ZIP="$DEST/code.zip"
 "$PY" - "$ROOT" "$CODE_ZIP" <<'PY'
@@ -31,6 +51,9 @@ if not code_dir.exists():
 
 with ZipFile(out, "w", compression=ZIP_DEFLATED) as zf:
     for sub in sorted(p for p in code_dir.rglob("*") if p.is_file()):
+        rel_parts = sub.relative_to(code_dir).parts
+        if rel_parts and rel_parts[0] in {"artifacts", "dataset", "data", "node_modules", "venv", ".venv"}:
+            continue
         if "__pycache__" in sub.parts or ".orchestrate_image_cache" in sub.parts:
             continue
         if sub.name == ".env" or sub.name.endswith(".env"):
@@ -40,11 +63,17 @@ with ZipFile(out, "w", compression=ZIP_DEFLATED) as zf:
         zf.write(sub, sub.relative_to(root))
 PY
 
-cp "$LATEST_RUN/output.csv" "$DEST/output.csv"
-cp "$LATEST_RUN/manifest.json" "$DEST/manifest.json"
-cp "$LATEST_RUN/run_transcript.md" "$DEST/run_transcript.md"
-if [ -f "$LATEST_RUN/evaluation.json" ]; then
-  cp "$LATEST_RUN/evaluation.json" "$DEST/evaluation.json"
+cp "$OUTPUT_CSV" "$DEST/output.csv"
+if [ -n "$LATEST_RUN" ]; then
+  if [ -f "$LATEST_RUN/manifest.json" ]; then
+    cp "$LATEST_RUN/manifest.json" "$DEST/manifest.json"
+  fi
+  if [ -f "$LATEST_RUN/run_transcript.md" ]; then
+    cp "$LATEST_RUN/run_transcript.md" "$DEST/run_transcript.md"
+  fi
+  if [ -f "$LATEST_RUN/evaluation.json" ]; then
+    cp "$LATEST_RUN/evaluation.json" "$DEST/evaluation.json"
+  fi
 fi
 
 CHAT_LOG="$HOME/hackerrank_orchestrator/log.txt"

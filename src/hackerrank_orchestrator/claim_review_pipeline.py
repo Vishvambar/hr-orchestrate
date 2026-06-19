@@ -171,6 +171,14 @@ def _build_review_prompt(
 ) -> str:
     base = project_root()
     system_prompt = read_prompt(config.prompts.system, base=base)
+    few_shot_prompt = ""
+    if os.getenv("ORCH_USE_FEW_SHOT", "false").lower() in {"1", "true", "yes"}:
+        few_shot_path = resolve_path(
+            os.getenv("ORCH_FEW_SHOT_PROMPT", "configs/prompts/multimodal_few_shot.md"),
+            base,
+        )
+        if few_shot_path.exists():
+            few_shot_prompt = few_shot_path.read_text(encoding="utf-8").strip()
     review_prompt = read_prompt(config.prompts.review, base=base)
     body = review_prompt.format(
         task_summary=config.summary,
@@ -182,7 +190,11 @@ def _build_review_prompt(
     image_manifest = "Image IDs available for this row: " + (
         ", ".join(image_ids) if image_ids else "none"
     )
-    return system_prompt + "\n\n" + image_manifest + "\n\n" + body
+    prompt_parts = [system_prompt]
+    if few_shot_prompt:
+        prompt_parts.append(few_shot_prompt)
+    prompt_parts.extend([image_manifest, body])
+    return "\n\n".join(part for part in prompt_parts if part)
 
 
 def _bool_string(value: Any) -> str:
@@ -199,6 +211,19 @@ def _normalize_allowed(value: Any, allowed_values: list[str], fallback: str) -> 
     candidate = str(value).strip().lower()
     if candidate in lowered_map:
         return lowered_map[candidate]
+        
+    if "supported" in lowered_map:
+        synonyms = {
+            "approved": "supported",
+            "yes": "supported",
+            "rejected": "contradicted",
+            "denied": "contradicted",
+            "insufficient": "not_enough_information",
+            "unknown": "not_enough_information",
+        }
+        if candidate in synonyms and synonyms[candidate] in lowered_map:
+            return lowered_map[synonyms[candidate]]
+            
     for item in allowed_values:
         item_lower = item.lower()
         if candidate and (candidate in item_lower or item_lower in candidate):
@@ -252,6 +277,14 @@ def _risk_flags_to_list(value: str) -> list[str]:
 def _join_risk_flags(flags: list[str]) -> str:
     unique = sorted(dict.fromkeys(flags))
     return ";".join(unique) if unique else "none"
+
+
+def _filter_allowed_risk_flags(value: str, allowed_values: list[str]) -> str:
+    if not allowed_values:
+        return value
+    allowed = {item for item in allowed_values if item != "none"}
+    filtered = [flag for flag in _risk_flags_to_list(value) if flag in allowed]
+    return _join_risk_flags(filtered)
 
 
 def _claim_review_fallback(
@@ -336,6 +369,11 @@ def _normalize_claim_review_output(
         if config.find_field("severity")
         else []
     )
+    allowed_risk_flags = (
+        config.find_field("risk_flags").allowed_values
+        if config.find_field("risk_flags")
+        else []
+    )
     allowed_parts = OBJECT_PARTS_BY_OBJECT.get(claim_object, {"unknown"})
 
     risk_flags_raw = model_output.get("risk_flags", [])
@@ -397,9 +435,16 @@ def _normalize_claim_review_output(
         evidence_standard_met = "false"
         claim_status = "not_enough_information"
         supporting_ids = "none"
-        severity = "unknown" if severity == "none" else severity
+        severity = "unknown"
     if evidence_standard_met == "false":
         claim_status = "not_enough_information"
+        severity = "unknown"
+    
+    if claim_status == "not_enough_information":
+        severity = "unknown"
+    elif claim_status == "contradicted" and severity not in {"none", "unknown", "low"}:
+        severity = "low"
+
     if (
         config.rules.require_explicit_supporting_image_ids
         and claim_status in {"supported", "contradicted"}
@@ -407,6 +452,7 @@ def _normalize_claim_review_output(
     ):
         evidence_standard_met = "false"
         claim_status = "not_enough_information"
+        severity = "unknown"
         risk_flags = normalize_risk_flags([risk_flags, "manual_review_required"])
 
     evidence_reason = str(model_output.get("evidence_standard_met_reason", "")).strip()
@@ -439,7 +485,8 @@ def _normalize_claim_review_output(
         if issue_type in {"unknown", "none"} or not any(
             word in combined_text.lower() for word in visible_words
         ):
-            issue_type = inferred_visible_issue
+            if claim_status != "contradicted":
+                issue_type = inferred_visible_issue
 
     if claim_status == "supported" and severity in {"none", "unknown"}:
         lowered = combined_text.lower()
@@ -467,6 +514,8 @@ def _normalize_claim_review_output(
     ):
         risk_list = [flag for flag in risk_list if flag != "manual_review_required"]
         risk_flags = _join_risk_flags(risk_list)
+
+    risk_flags = _filter_allowed_risk_flags(risk_flags, allowed_risk_flags)
 
     return {
         "user_id": row.get(config.user_id_column, ""),
@@ -527,6 +576,14 @@ def _update_evaluation_report(
     evaluation: dict[str, Any] | None,
     runtime_seconds: float,
 ) -> None:
+    input_tokens = int(stats.get("prompt_tokens_total", 0) or 0)
+    output_tokens = int(stats.get("completion_tokens_total", 0) or 0)
+    input_price_per_m = float(os.getenv("ORCH_ASSUMED_INPUT_USD_PER_M", "2.50"))
+    output_price_per_m = float(os.getenv("ORCH_ASSUMED_OUTPUT_USD_PER_M", "10.00"))
+    estimated_cost = (input_tokens / 1_000_000 * input_price_per_m) + (
+        output_tokens / 1_000_000 * output_price_per_m
+    )
+
     report_lines = [
         "# Evaluation Report — Multi-Modal Evidence Review",
         "",
@@ -564,15 +621,15 @@ def _update_evaluation_report(
             "",
             "## 4. Operational analysis",
             "",
-            f"- Approximate number of model calls for sample + test processing in this run: {stats.get('provider_calls_total', 0)}",
-            f"- Approximate input tokens observed or estimated: {stats.get('prompt_tokens_total', 0)}",
-            f"- Approximate output tokens observed or estimated: {stats.get('completion_tokens_total', 0)}",
+            f"- Approximate number of model calls in this run: {stats.get('provider_calls_total', 0)}",
+            f"- Approximate input tokens observed or estimated: {input_tokens}",
+            f"- Approximate output tokens observed or estimated: {output_tokens}",
             f"- Number of images processed: {image_count}",
             f"- Approximate runtime: {round(runtime_seconds, 2)} seconds",
             f"- Provider attempts by name: {stable_json(stats.get('provider_attempts', {}))}",
-            "- Pricing assumptions: fill in with your chosen provider's current pricing before final submission.",
-            "- TPM/RPM considerations: sequential failover with per-row delay and bounded retries.",
-            "- Batching / throttling / caching / retry strategy: one multimodal review call per row, sequential provider failover, bounded cooldown and conservative fallback.",
+            f"- Approximate cost for this run: ${estimated_cost:.4f}, assuming ${input_price_per_m:.2f}/1M input tokens and ${output_price_per_m:.2f}/1M output tokens. Actual cash cost may be $0 when the run stays within provider free quota.",
+            "- TPM/RPM considerations: sequential calls, row delay, bounded provider cycles, and no parallel fan-out to avoid free-tier spikes.",
+            "- Batching / throttling / caching / retry strategy: one multimodal review call per row, sequential provider failover, per-row checkpointing, resume-from-output, bounded cooldown, and conservative fallback.",
             "",
             "## 5. Final decision notes",
             "",
@@ -597,7 +654,8 @@ def run_claim_review(
     contract_file = resolve_path(contract_path, root)
     config = load_claim_review_config(contract_file, base=root)
 
-    input_rows = _read_input_rows(resolve_path(config.input_csv, root))
+    input_path = resolve_path(config.input_csv, root)
+    input_rows = _read_input_rows(input_path)
     if max_rows is not None:
         input_rows = input_rows[:max_rows]
 
@@ -831,7 +889,9 @@ def run_claim_review(
     evaluation: dict[str, Any] | None = None
     if config.expected_csv:
         expected_path = resolve_path(config.expected_csv, root)
-        if expected_path.exists():
+        # Only score predictions when the run input is the labeled sample file.
+        # Final claims.csv predictions should not be compared against sample rows.
+        if expected_path.exists() and expected_path.resolve() == input_path.resolve():
             evaluation = evaluate_claim_review_csv(
                 expected_path,
                 output_path,

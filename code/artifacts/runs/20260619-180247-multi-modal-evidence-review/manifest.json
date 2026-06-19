@@ -1,0 +1,32 @@
+{
+  "contract_hash": "f9652fe8d5fcf945e95c4aa5d1b8fef12f43761626b0f7d3c019127bdb1f46a0",
+  "contract_name": "multi_modal_evidence_review",
+  "contract_path": "/tmp/orchestrate_contract_0qd1lb5z/contract.toml",
+  "images_processed": 49,
+  "output_csv": "artifacts/runs/20260619-180247-multi-modal-evidence-review/output.csv",
+  "primary_provider": "groq_llama",
+  "prompt_hashes": {
+    "review": "b8008e382cbbc0a3d452839b1ab24c375d475b3f2a543cd72f42a0d2174f65db",
+    "system": "c54afdb51136a310a2593dc51672867e247fc29ef760c434aa860cf141a60c5b",
+    "verify": "0a865576756a1b8340a011b5d7313a267a978b070443f38b567234220b25f520"
+  },
+  "provider_stats": {
+    "completion_tokens_total": 4046,
+    "prompt_tokens_total": 84725,
+    "provider_attempts": {
+      "gemini": 2,
+      "github_models": 2,
+      "groq_llama": 25,
+      "groq_qwen": 1,
+      "openrouter": 1
+    },
+    "provider_calls_total": 31,
+    "rows_without_usable_images": 1,
+    "successful_providers": [
+      "groq_llama",
+      "github_models"
+    ]
+  },
+  "rows_processed": 44,
+  "run_timestamp_utc": "2026-06-19T18:13:26.362661+00:00"
+}
