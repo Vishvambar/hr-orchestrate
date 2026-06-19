@@ -11,7 +11,7 @@ It is intentionally **stdlib-first** so it runs cleanly on the existing Python `
 - local corpus loading and deterministic lexical retrieval
 - explicit escalation rules for risky / unsupported cases
 - rule-based fallback provider that works with zero API keys
-- optional `OpenAI` and `Anthropic` provider stubs for hackathon-time upgrades
+- optional `OpenAI`, `Anthropic`, and OpenAI-compatible fallback providers for hackathon-time upgrades
 - run artifacts: `manifest.json`, `retrieved_evidence.jsonl`, `run_transcript.md`, `output.csv`
 - packaging script for `code zip + output + transcript`
 - research notes and an AI judge cheat sheet
@@ -58,6 +58,12 @@ It is intentionally **stdlib-first** so it runs cleanly on the existing Python `
 ./venv/bin/python -m pip install -e .[openai]
 ./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider openai --model gpt-4.1-mini
 
+# Use one generic OpenAI-compatible provider (good for low-cost/free-tier setup)
+./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider compat
+
+# Or let the runner try compatible providers you configured in .env
+./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider auto
+
 # Inspect retrieval before changing prompts
 ./venv/bin/python -m hackerrank_orchestrator inspect --contract challenge/current/contract.toml --query "example question"
 
@@ -94,4 +100,5 @@ The packaging script tries to copy that transcript automatically if it exists.
 - `docs/hackathon-playbook.md`
 - `docs/adaptation-guide.md`
 - `docs/judge-interview-cheatsheet.md`
+- `docs/provider-setup.md`
 # hr-orchestrate
