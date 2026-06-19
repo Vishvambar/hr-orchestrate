@@ -1,0 +1,5 @@
+ticket_id,status,product_area,response,justification,request_type
+1,replied,account,Use the password reset flow from the sign-in page. If you no longer have access to the registered email, contact support so ownership can be verified before the email is changed.,Answered from account_access.md because it directly covers the request.,product_issue
+2,escalated,billing,Escalated for manual review. If a customer reports a duplicate charge, the case should be escalated to billing support for manual investigation.,Escalated because the evidence indicates manual review is required. Grounded in billing_refunds.md.,bug
+3,escalated,shipping,Escalated for manual review. Packages that show no movement for more than 7 days should be escalated for manual review as potentially lost in transit.,Escalated because the evidence indicates manual review is required. Grounded in shipping_delays.md.,product_issue
+4,escalated,general,Escalated for manual review. The available corpus does not contain grounded guidance for this request.,Escalated because evidence was below the confidence threshold.,feature_request

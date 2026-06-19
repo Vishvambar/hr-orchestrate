@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hackerrank-orchestrator-starter"
+version = "0.1.0"
+description = "Hackathon-ready starter for HackerRank Orchestrate"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=1.93.0"]
+anthropic = ["anthropic>=0.57.0"]
+dev = ["pytest>=8.4.0", "ruff>=0.12.0"]
+
+[project.scripts]
+hko = "hackerrank_orchestrator.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,55 @@
+name = "demo_support_triage"
+summary = "Answer simple support requests using only the local FAQ corpus. Escalate risky or unsupported cases instead of guessing."
+corpus_dir = "examples/demo_challenge/corpus"
+input_csv = "examples/demo_challenge/input/tasks.csv"
+expected_csv = "examples/demo_challenge/expected/output.csv"
+output_csv = "artifacts/runs/latest/output.csv"
+id_column = "ticket_id"
+text_columns = ["subject", "message"]
+passthrough_columns = ["ticket_id"]
+
+[prompts]
+system = "configs/prompts/system.md"
+solve = "configs/prompts/solve.md"
+verify = "configs/prompts/verify.md"
+
+[retrieval]
+top_k = 4
+min_score = 0.12
+max_chunks = 6
+chunk_size = 900
+chunk_overlap = 120
+
+[rules]
+escalation_keywords = ["fraud", "lawsuit", "security", "charged twice", "duplicate charge"]
+min_evidence_score = 0.10
+
+[[output_fields]]
+name = "status"
+description = "Whether the agent replied directly or escalated"
+required = true
+allowed_values = ["replied", "escalated"]
+
+[[output_fields]]
+name = "product_area"
+description = "Most relevant support area"
+required = true
+allowed_values = ["account", "billing", "shipping", "general"]
+
+[[output_fields]]
+name = "response"
+description = "User-facing answer grounded in the FAQ corpus"
+required = true
+allowed_values = []
+
+[[output_fields]]
+name = "justification"
+description = "Short explanation of the decision"
+required = true
+allowed_values = []
+
+[[output_fields]]
+name = "request_type"
+description = "Type of request"
+required = true
+allowed_values = ["product_issue", "feature_request", "bug", "invalid"]

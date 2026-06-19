@@ -1,0 +1,53 @@
+# Copy this file to challenge/current/contract.toml when the official prompt arrives.
+# All paths are relative to the project root.
+
+name = "replace_me"
+summary = "Paste the challenge summary or task objective here."
+corpus_dir = "challenge/current/data"
+input_csv = "challenge/current/input.csv"
+expected_csv = ""
+output_csv = "artifacts/runs/latest/output.csv"
+id_column = "id"
+text_columns = ["title", "description"]
+passthrough_columns = ["id"]
+
+[prompts]
+system = "configs/prompts/system.md"
+solve = "configs/prompts/solve.md"
+verify = "configs/prompts/verify.md"
+
+[retrieval]
+top_k = 6
+min_score = 0.18
+max_chunks = 8
+chunk_size = 900
+chunk_overlap = 120
+
+[rules]
+escalation_keywords = ["security", "fraud", "legal", "lawsuit", "unsafe", "self-harm", "payment dispute"]
+min_evidence_score = 0.10
+
+# Replace these fields with the exact output schema from the problem statement.
+[[output_fields]]
+name = "status"
+description = "Direct answer or escalation decision"
+required = true
+allowed_values = ["replied", "escalated"]
+
+[[output_fields]]
+name = "product_area"
+description = "Most relevant category or domain area"
+required = true
+allowed_values = []
+
+[[output_fields]]
+name = "response"
+description = "User-facing response grounded in the local corpus"
+required = true
+allowed_values = []
+
+[[output_fields]]
+name = "justification"
+description = "Concise explanation of why this answer or escalation was chosen"
+required = true
+allowed_values = []
