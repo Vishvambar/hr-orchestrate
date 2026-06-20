@@ -1,119 +1,322 @@
-# HackerRank Orchestrate Starter Workspace
+# Multi-Modal Evidence Review — Submission
 
-This workspace is prepped for **HackerRank Orchestrate** with a bias toward the public judging rubric: clean architecture, grounded corpus use, deterministic behavior, explicit escalation, and strong interview explainability.
+An image-first, fault-tolerant claim verification pipeline that decides whether submitted photographs support, contradict, or provide insufficient information for an insurance damage claim.
 
-It is now also adapted for the published **Multi-Modal Evidence Review** prompt, where images are the primary source of truth and the submission must include an `evaluation/` folder.
+## Table of Contents
 
-It is intentionally **stdlib-first** so it runs cleanly on the existing Python `3.14` virtualenv without depending on a large framework stack.
+- [Approach Overview](#approach-overview)
+- [Architecture](#architecture)
+- [Setup Instructions](#setup-instructions)
+- [How to Run](#how-to-run)
+- [Project Structure](#project-structure)
+- [Configuration Reference](#configuration-reference)
+- [Design Decisions](#design-decisions)
+- [Evaluation & Operational Analysis](#evaluation--operational-analysis)
 
-## What is already ready
+---
 
-- a terminal-first Python package under `src/hackerrank_orchestrator/`
-- configurable challenge contract via `TOML`
-- local corpus loading and deterministic lexical retrieval for text tasks
-- multimodal claim-review helpers for image-path parsing, issue parsing, and set-aware evaluation
-- explicit escalation rules for risky / unsupported cases
-- rule-based fallback provider that works with zero API keys
-- optional `OpenAI`, `Anthropic`, and OpenAI-compatible fallback providers for hackathon-time upgrades
-- run artifacts: `manifest.json`, `retrieved_evidence.jsonl`, `run_transcript.md`, `output.csv`
-- packaging script for `code zip + output + transcript`
-- `evaluation/` folder scaffold and report template required by the official prompt
-- research notes and an AI judge cheat sheet
-- a runnable demo challenge so you can verify the baseline before the dataset arrives
+## Approach Overview
 
-## Quick start
+Each claim row consists of one or more images, a customer–support conversation, optional user history, and a set of minimum evidence requirements. The system processes every row through the following pipeline:
 
-### 1. Install the local package
+1. **Claim Extraction** — Parse the `user_claim` conversation to identify the reported damage type and the object part involved.
+2. **Evidence Requirement Matching** — Look up the relevant `evidence_requirements.csv` entries for the claim's `claim_object` and damage type.
+3. **Image Preprocessing** — Normalize image formats (AVIF-in-JPEG detection, format conversion) and automatically downscale any image exceeding 2 MB to 1024×1024 using LANCZOS resampling to prevent `413 Request Entity Too Large` API errors.
+4. **Multimodal Vision Review** — Send the system prompt, review prompt (containing the conversation, evidence requirements, and user history context), and all images to a vision-capable LLM. The model returns a structured JSON verdict.
+5. **Deterministic Post-Processing** — Normalize every output field against the allowed value lists defined in the contract. Enforce business rules (e.g., severity must be `unknown` when `claim_status` is `not_enough_information`; `supporting_image_ids` must be `none` when claim is contradicted).
+6. **Per-Row Checkpointing** — Write each completed row to `output.csv` immediately, enabling safe resume if the process is interrupted.
 
-```bash
-./venv/bin/python -m pip install -e .
+### Key Principles
+
+- **Images are the primary source of truth.** The LLM is instructed to ground every decision in what is visually observable.
+- **User history adds risk context only.** It must never override clear visual evidence.
+- **Prompt injection defense.** The system prompt explicitly instructs the model to ignore any text or instructions embedded within images.
+- **Conservative fallback.** If all API providers fail for a row, the system emits a safe `not_enough_information` verdict rather than crashing.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    main.py (CLI Entry)                    │
+│  Reads dataset CSVs, builds TOML contract, invokes       │
+│  the claim review pipeline                               │
+└──────────────────────┬───────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────┐
+│             claim_review_pipeline.py                      │
+│  For each row:                                           │
+│    1. Build prompt from templates + row data              │
+│    2. Resolve image paths                                 │
+│    3. Call SequentialVisionRouter                          │
+│    4. Normalize + validate output fields                  │
+│    5. Checkpoint row to output.csv                        │
+└──────────────────────┬───────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────┐
+│         SequentialVisionRouter (vision_failover.py)       │
+│                                                          │
+│  5-Layer Provider Fallback Chain:                         │
+│                                                          │
+│   ┌─────────────┐   ┌──────────────┐   ┌──────────────┐ │
+│   │ 1. Groq     │──▸│ 2. Gemini    │──▸│ 3. GitHub    │ │
+│   │ Llama Scout │   │ 2.5 Flash    │   │ GPT-4o       │ │
+│   └─────────────┘   └──────────────┘   └──────────────┘ │
+│          │                                    │          │
+│          ▼                                    ▼          │
+│   ┌──────────────┐              ┌──────────────────┐     │
+│   │ 4. OpenRouter│◂─────────────│ 5. Groq Qwen 3.6 │     │
+│   │ Gemma        │              │ (last resort)     │     │
+│   └──────────────┘              └──────────────────┘     │
+│                                                          │
+│  On 429/413/timeout: catch → log attempt → next provider │
+│  On full cycle exhaust: cooldown → retry cycle            │
+└──────────────────────┬───────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────┐
+│                  image_utils.py                           │
+│  - AVIF/WebP → JPEG conversion with caching              │
+│  - Auto-downscale images > 2 MB (LANCZOS, 1024×1024)     │
+│  - Base64 encoding for API payloads                       │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### 2. Run the demo end-to-end
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.10 or later
+- `pip` package manager
+- At least one vision-capable API key (see below)
+
+### 1. Clone and enter the repository
 
 ```bash
-./venv/bin/python -m hackerrank_orchestrator demo
+git clone https://github.com/Vishvambar/hr-orchestrate.git
+cd hr-orchestrate
 ```
 
-### 3. Run tests
+### 2. Create a virtual environment (recommended)
 
 ```bash
-./venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+python -m venv venv
+source venv/bin/activate        # Linux / macOS
+# venv\Scripts\activate         # Windows
 ```
 
-## When the official challenge arrives
-
-1. Put the official files under `challenge/current/`.
-2. Copy `configs/challenge.template.toml` to `challenge/current/contract.toml`.
-3. Update the contract paths, input columns, output fields, and labels.
-4. Review `configs/prompts/system.md` and `configs/prompts/solve.md`.
-5. Use retrieval inspection on a few sample rows.
-6. Run on sample data first.
-7. Iterate against evidence.
-8. Run on the full input and package the submission.
-
-## Core commands
+### 3. Install dependencies
 
 ```bash
-# Run any challenge contract
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider rule-based
-
-# Run the published Multi-Modal Evidence Review pipeline
-./venv/bin/python -m hackerrank_orchestrator run-claims --contract challenge/current/contract.toml
-
-# Use a hosted LLM after installing the extra you want
-./venv/bin/python -m pip install -e .[openai]
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider openai --model gpt-4.1-mini
-
-# Use one generic OpenAI-compatible provider (good for low-cost/free-tier setup)
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider compat
-
-# Or let the runner try compatible providers you configured in .env
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider auto
-
-# For the multimodal challenge, configure at least one vision-capable provider:
-# GitHub Models (GITHUB_TOKEN), Gemini (GEMINI_API_KEY), or OpenRouter (OPENROUTER_API_KEY)
-./venv/bin/python -m hackerrank_orchestrator run-claims --contract challenge/current/contract.toml
-
-# Inspect retrieval before changing prompts
-./venv/bin/python -m hackerrank_orchestrator inspect --contract challenge/current/contract.toml --query "example question"
-
-# Evaluate against a gold CSV if one exists
-./venv/bin/python -m hackerrank_orchestrator evaluate --expected examples/demo_challenge/expected/output.csv --predicted artifacts/runs/<run-id>/output.csv --id-column ticket_id
-
-# Evaluate the claim-review task with set-aware comparison for risk flags and image IDs
-./venv/bin/python -m hackerrank_orchestrator evaluate-claims --expected challenge/current/dataset/sample_claims.csv --predicted artifacts/runs/<run-id>/output.csv
-
-# Create a dated decision note for your interview prep
-./venv/bin/python -m hackerrank_orchestrator kickoff --name june26
+pip install -r code/requirements.txt
 ```
 
-## Repo map
+Dependencies are minimal by design:
 
-- `src/hackerrank_orchestrator/` — agent pipeline and CLI
-- `configs/` — prompt templates and challenge contract template
-- `docs/` — research, playbook, adaptation guide, judge prep
-- `examples/demo_challenge/` — sample corpus + input + expected output
-- `challenge/current/` — drop the official challenge here when it arrives
-- `artifacts/runs/` — generated run artifacts
-- `submissions/` — packaged deliverables ready to upload
+| Package              | Purpose                                              |
+|----------------------|------------------------------------------------------|
+| `openai>=1.93.0`     | OpenAI-compatible SDK for GitHub Models & OpenRouter  |
+| `pillow>=10.0.0`     | Image resizing and format conversion                  |
+| `pillow-avif-plugin` | AVIF format support for mislabeled image containers   |
 
-## Transcript logging for the hackathon
+> **Note:** The Groq SDK (`groq`) and Google Gemini API are called via their respective native HTTP clients and do not require additional pip packages beyond those listed above.
 
-The June event page says you will upload **code, agent output, and AI chat transcript**.
+### 4. Configure API keys
 
-This workspace includes `AGENTS.md` so tools that support it can append summaries to:
+Copy the example environment file and fill in your keys:
 
-- `~/hackerrank_orchestrator/log.txt`
+```bash
+cp code/.env.example code/.env
+```
 
-The packaging script tries to copy that transcript automatically if it exists.
+Edit `code/.env` with at least one provider:
 
-## Strategy references
+```env
+# Primary — Groq (free tier, 500k TPD)
+GROQ_API_KEY=gsk_your_key_here
 
-- `docs/orchestrate-research.md`
-- `docs/hackathon-playbook.md`
-- `docs/adaptation-guide.md`
-- `docs/judge-interview-cheatsheet.md`
-- `docs/provider-setup.md`
-- `docs/multimodal-evidence-review-plan.md`
-# hr-orchestrate
+# Secondary — Google Gemini (free tier)
+GEMINI_API_KEY=your_key_here
+
+# Tertiary — GitHub Models (free tier)
+GITHUB_TOKEN=your_token_here
+
+# Quaternary — OpenRouter (free tier)
+OPENROUTER_API_KEY=your_key_here
+
+# Provider execution order (left = highest priority)
+ORCH_PROVIDER_ORDER=groq_llama,gemini,github_models,openrouter,groq_qwen
+
+# Rate-limit mitigation
+ORCH_ROW_DELAY_SECONDS=5
+ORCH_RESUME_OUTPUT=true
+```
+
+### 5. Place the dataset
+
+Ensure the `dataset/` directory is at the repository root:
+
+```
+.
+├── dataset/
+│   ├── claims.csv              # or test.csv
+│   ├── sample_claims.csv       # labeled sample for local evaluation
+│   ├── user_history.csv
+│   ├── evidence_requirements.csv
+│   └── images/
+│       ├── sample/case_001/...
+│       └── test/case_001/...
+└── code/
+    ├── main.py
+    └── ...
+```
+
+---
+
+## How to Run
+
+### Full evaluation (all 44 test rows)
+
+```bash
+python code/main.py --output output.csv
+```
+
+### Limit to N rows (for testing)
+
+```bash
+python code/main.py --output output.csv --max-rows 5
+```
+
+### Resume an interrupted run
+
+The pipeline automatically detects existing rows in `output.csv` and skips them:
+
+```bash
+# If the process was interrupted at row 20, just re-run:
+python code/main.py --output output.csv
+# → resumes from row 21
+```
+
+### Sample evaluation (labeled data)
+
+```bash
+python code/evaluation/main.py --output code/evaluation/sample_predictions.csv
+```
+
+### Output
+
+- **`output.csv`** — Predictions for all rows with the 14 required columns
+- **`artifacts/runs/<timestamp>/`** — Run logs, manifest, resolved contract, and per-row JSONL
+
+---
+
+## Project Structure
+
+```
+code/
+├── main.py                          # CLI entrypoint
+├── README.md                        # This file
+├── requirements.txt                 # Python dependencies
+├── .env.example                     # Template for API keys
+│
+├── configs/
+│   └── prompts/
+│       ├── multimodal_system.md     # System prompt (rules, injection defense)
+│       ├── multimodal_review.md     # Per-row review prompt template
+│       ├── multimodal_verify.md     # Verification prompt (unused, reserved)
+│       └── multimodal_few_shot.md   # Few-shot examples (optional)
+│
+├── src/hackerrank_orchestrator/
+│   ├── claim_review_pipeline.py     # Main pipeline loop
+│   ├── claim_review_config.py       # TOML contract loader
+│   ├── vision_failover.py           # 5-layer provider router
+│   ├── image_utils.py               # Image preprocessing & downscaling
+│   ├── multimodal_helpers.py        # Prompt builder & output normalizer
+│   ├── multimodal_evaluation.py     # Set-aware field evaluation
+│   ├── artifacts.py                 # Run artifact management
+│   └── utils.py                     # Stable JSON serialization
+│
+├── evaluation/
+│   ├── main.py                      # Sample evaluation runner
+│   ├── experiment_loop.py           # Prompt/parameter experiments
+│   └── evaluation_report.md         # Operational analysis
+│
+└── docs/
+    └── interview_cheatsheet.md      # AI Judge interview preparation
+```
+
+---
+
+## Configuration Reference
+
+| Environment Variable            | Default                                     | Description                                                         |
+|---------------------------------|---------------------------------------------|---------------------------------------------------------------------|
+| `GROQ_API_KEY`                  | —                                           | Groq API key for Llama and Qwen models                              |
+| `GEMINI_API_KEY`                | —                                           | Google AI Studio API key                                            |
+| `GITHUB_TOKEN`                  | —                                           | GitHub personal access token for GPT-4o                             |
+| `OPENROUTER_API_KEY`            | —                                           | OpenRouter API key for Gemma and other models                       |
+| `ORCH_PROVIDER_ORDER`           | `groq_llama,gemini,github_models,openrouter,groq_qwen` | Comma-separated failover priority                    |
+| `ORCH_ROW_DELAY_SECONDS`       | `5`                                         | Delay between rows to respect RPM limits                            |
+| `ORCH_VISION_COOLDOWN_SECONDS` | `15`                                        | Wait time after a full provider cycle fails before retrying         |
+| `ORCH_VISION_MAX_CYCLES`       | `2`                                         | Maximum retry cycles through the entire provider list               |
+| `ORCH_RESUME_OUTPUT`           | `true`                                      | Skip already-completed rows in `output.csv`                         |
+| `ORCH_IMAGE_DETAIL`            | `auto`                                      | Image detail level sent to OpenAI-compatible providers              |
+
+---
+
+## Design Decisions
+
+### Why 5 providers instead of 1?
+
+Free-tier API limits are strict (Groq: 500k tokens/day, Gemini: 20 RPM, GitHub: rate-limited). A single provider would fail partway through the 44-row dataset. The sequential router guarantees that if one provider hits its limit, the next one picks up seamlessly — no data loss, no crashes.
+
+### Why Llama 4 Scout as primary?
+
+We tested Qwen 3.6 27B first. While its analysis quality was high, it generated excessive `<think>` reasoning tokens that consumed the 1200-token output budget and truncated the JSON response. Llama 4 Scout produces clean, structured JSON without chain-of-thought overhead, making it the ideal primary.
+
+### Why auto-downscale images?
+
+Row 43 in the test dataset contains high-resolution images exceeding 2 MB. Without downscaling, every provider rejects the payload with a `413 Request Entity Too Large` error. The LANCZOS downscaler (1024×1024, quality 85) preserves enough visual detail for damage assessment while keeping payloads under API limits.
+
+### Why brace-counting JSON extraction?
+
+LLMs occasionally wrap JSON in markdown code fences, prepend reasoning text, or produce partial outputs. The brace-counting parser (`_parse_json_object`) reliably extracts the JSON object regardless of surrounding noise, making the pipeline robust against inconsistent model output formatting.
+
+### Why per-row checkpointing?
+
+A 44-row run takes ~20 minutes on free-tier APIs with rate-limit delays. If the process is interrupted at row 30, per-row checkpointing ensures rows 1–30 are preserved and the next run resumes from row 31 — no wasted API calls.
+
+---
+
+## Evaluation & Operational Analysis
+
+See [`evaluation/evaluation_report.md`](evaluation/evaluation_report.md) for full operational metrics including:
+
+- Token usage estimates (~105k input, ~8k output across 44 rows)
+- Provider attempt distribution (Groq Llama: 44, Gemini: 23, GitHub: 22, OpenRouter: 13, Groq Qwen: 8)
+- Approximate runtime (~20 minutes with rate-limit delays)
+- Cost analysis ($0.00 actual on free tiers; $0.34 theoretical at paid rates)
+
+### Output Schema
+
+| Column                         | Type     | Example Values                              |
+|--------------------------------|----------|---------------------------------------------|
+| `user_id`                      | string   | `user_001`                                  |
+| `image_paths`                  | string   | `images/test/case_001/img_1.jpg`            |
+| `user_claim`                   | string   | Conversation transcript                     |
+| `claim_object`                 | enum     | `car`, `laptop`, `package`                  |
+| `evidence_standard_met`        | boolean  | `true`, `false`                             |
+| `evidence_standard_met_reason` | string   | Free-text reasoning                         |
+| `risk_flags`                   | set      | `none`, `blurry_image;user_history_risk`    |
+| `issue_type`                   | enum     | `dent`, `scratch`, `crack`, `unknown`       |
+| `object_part`                  | enum     | `front_bumper`, `screen`, `box`, `unknown`  |
+| `claim_status`                 | enum     | `supported`, `contradicted`, `not_enough_information` |
+| `claim_status_justification`   | string   | Image-grounded explanation                  |
+| `supporting_image_ids`         | set      | `img_1`, `img_1;img_2`, `none`              |
+| `valid_image`                  | boolean  | `true`, `false`                             |
+| `severity`                     | enum     | `low`, `medium`, `high`, `unknown`, `none`  |
