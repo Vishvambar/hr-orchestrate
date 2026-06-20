@@ -23,3 +23,5 @@ challenge/archive/*
 challenge/current/*
 !challenge/current/README.md
 !challenge/current/*.toml
+docs/*
+submissions/*
