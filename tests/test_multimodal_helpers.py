@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from hackerrank_orchestrator.multimodal_helpers import (
+from claim_orchestrator.multimodal_helpers import (
     derive_issue_family,
     history_risk_flags,
     normalize_risk_flags,

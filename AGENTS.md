@@ -15,8 +15,8 @@ Optimize for the public Orchestrate rubric:
 ## Mandatory transcript logging
 
 Append every session and meaningful turn summary to:
-- Linux/macOS: `~/hackerrank_orchestrator/log.txt`
-- Windows: `%USERPROFILE%\\hackerrank_orchestrator\\log.txt`
+- Linux/macOS: `~/claim_orchestrator/log.txt`
+- Windows: `%USERPROFILE%\\claim_orchestrator\\log.txt`
 
 Create the parent directory if it does not exist.
 Keep the file append-only.

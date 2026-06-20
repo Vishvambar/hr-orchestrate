@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-./venv/bin/python -m hackerrank_orchestrator demo
+./venv/bin/python -m claim_orchestrator demo

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from hackerrank_orchestrator.image_utils import (
+from claim_orchestrator.image_utils import (
     build_openai_compatible_image_content,
     image_id_from_path,
     image_ids_from_raw,

@@ -5,8 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
-from hackerrank_orchestrator.pipeline import run_contract
-from hackerrank_orchestrator.utils import project_root
+from claim_orchestrator.pipeline import run_contract
+from claim_orchestrator.utils import project_root
 
 
 class DemoPipelineTests(unittest.TestCase):

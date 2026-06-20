@@ -27,7 +27,7 @@ That keeps debugging simple and avoids accidental provider switching.
 Use the deterministic baseline until the task contract is stable:
 
 ```bash
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider rule-based
+./venv/bin/python -m claim_orchestrator run --contract challenge/current/contract.toml --provider rule-based
 ```
 
 This is the safest starting point for:
@@ -49,7 +49,7 @@ Then run:
 
 ```bash
 ./venv/bin/python -m pip install -e .[openai]
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider compat
+./venv/bin/python -m claim_orchestrator run --contract challenge/current/contract.toml --provider compat
 ```
 
 Use this when you have exactly one provider you trust.
@@ -70,7 +70,7 @@ Then run:
 
 ```bash
 ./venv/bin/python -m pip install -e .[openai]
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider auto
+./venv/bin/python -m claim_orchestrator run --contract challenge/current/contract.toml --provider auto
 ```
 
 This will try the first configured compatible provider that works and fail over if needed.
@@ -128,7 +128,7 @@ ORCH_VISION_MAX_CYCLES=2
 
 For the first run after the prompt arrives:
 1. place the official dataset under `challenge/current/dataset/`
-2. use `./venv/bin/python -m hackerrank_orchestrator run-claims --contract challenge/current/contract.toml --max-rows 5`
+2. use `./venv/bin/python -m claim_orchestrator run-claims --contract challenge/current/contract.toml --max-rows 5`
 3. inspect the generated `artifacts/runs/.../claim_reviews.jsonl`
 4. only then run the full dataset
 

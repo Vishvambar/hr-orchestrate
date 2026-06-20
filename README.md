@@ -1,6 +1,14 @@
-# Multi-Modal Evidence Review — Submission
+# Multi-Modal Claim Orchestrator 
 
-An image-first, fault-tolerant claim verification pipeline that decides whether submitted photographs support, contradict, or provide insufficient information for an insurance damage claim.
+An image-first, fault-tolerant pipeline that utilizes multi-modal LLMs to verify insurance damage claims. 
+
+**The Engineering Challenge:** 
+Processing high-resolution images through LLM APIs (Groq, Gemini, GPT-4o) frequently results in `413 Request Entity Too Large` crashes, `429 Rate Limit` blocks, and corrupted JSON outputs. 
+
+**The Solution:**
+This system introduces a robust **5-Layer Sequential Vision Router**. If a primary model (like Groq's Llama 4) fails due to rate limits or timeouts, the payload is dynamically intercepted, normalized (auto-downscaled via LANCZOS to sub-2MB), and seamlessly routed to the next available provider without dropping the process. 
+
+Coupled with deterministic JSON brace-counting extraction and per-row checkpointing, this pipeline guarantees 100% completion of asynchronous visual data processing without data loss.
 
 ## Table of Contents
 
@@ -231,7 +239,7 @@ code/
 │       ├── multimodal_verify.md     # Verification prompt (unused, reserved)
 │       └── multimodal_few_shot.md   # Few-shot examples (optional)
 │
-├── src/hackerrank_orchestrator/
+├── src/claim_orchestrator/
 │   ├── claim_review_pipeline.py     # Main pipeline loop
 │   ├── claim_review_config.py       # TOML contract loader
 │   ├── vision_failover.py           # 5-layer provider router

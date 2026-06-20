@@ -11,8 +11,8 @@ SRC_ROOT = CODE_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from hackerrank_orchestrator.claim_review_pipeline import run_claim_review
-from hackerrank_orchestrator.utils import stable_json
+from claim_orchestrator.claim_review_pipeline import run_claim_review
+from claim_orchestrator.utils import stable_json
 
 
 def _find_dataset_dir() -> Path:

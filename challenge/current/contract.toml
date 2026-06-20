@@ -1,6 +1,6 @@
 # Ready-to-use contract for the published Multi-Modal Evidence Review challenge.
 # Put the official files under challenge/current/dataset/ and run:
-#   ./venv/bin/python -m hackerrank_orchestrator run-claims --contract challenge/current/contract.toml
+#   ./venv/bin/python -m claim_orchestrator run-claims --contract challenge/current/contract.toml
 
 name = "multi_modal_evidence_review"
 summary = "Verify damage claims using images as the primary source of truth, plus user conversation, user history, and minimum evidence requirements."

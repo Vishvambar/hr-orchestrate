@@ -15,8 +15,8 @@ if str(SRC_ROOT) not in sys.path:
 
 from main import _default_contract_text, _find_dataset_dir  # noqa: E402
 
-from hackerrank_orchestrator.claim_review_pipeline import run_claim_review  # noqa: E402
-from hackerrank_orchestrator.utils import stable_json  # noqa: E402
+from claim_orchestrator.claim_review_pipeline import run_claim_review  # noqa: E402
+from claim_orchestrator.utils import stable_json  # noqa: E402
 
 
 def _sample_contract_text(dataset_dir: Path, output_path: Path) -> str:

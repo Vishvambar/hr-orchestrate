@@ -46,7 +46,7 @@ Avoid changing retrieval, rules, prompts, and output formatting all at once.
 - `output.csv` generated from the final full run
 - run artifacts saved under `artifacts/runs/`
 - `code.zip` created with source + configs + docs, but not `venv/` or bulky artifacts
-- AI chat transcript available at `~/hackerrank_orchestrator/log.txt` if your coding tool honored `AGENTS.md`
+- AI chat transcript available at `~/claim_orchestrator/log.txt` if your coding tool honored `AGENTS.md`
 - judge notes updated with:
   - architecture choice
   - alternatives rejected

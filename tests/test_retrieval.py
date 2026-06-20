@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from hackerrank_orchestrator.pipeline import inspect_contract
+from claim_orchestrator.pipeline import inspect_contract
 
 
 class RetrievalTests(unittest.TestCase):

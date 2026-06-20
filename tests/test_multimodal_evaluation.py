@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from hackerrank_orchestrator.multimodal_evaluation import evaluate_claim_review_csv
+from claim_orchestrator.multimodal_evaluation import evaluate_claim_review_csv
 
 
 class MultimodalEvaluationTests(unittest.TestCase):

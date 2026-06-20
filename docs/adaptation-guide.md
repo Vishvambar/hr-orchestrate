@@ -37,20 +37,20 @@ Do not add complexity until you have inspected retrieval on real rows.
 ### Inspect retrieval on a real row
 
 ```bash
-./venv/bin/python -m hackerrank_orchestrator inspect --contract challenge/current/contract.toml --query "paste a representative row here"
+./venv/bin/python -m claim_orchestrator inspect --contract challenge/current/contract.toml --query "paste a representative row here"
 ```
 
 ### Run a first end-to-end pass
 
 ```bash
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider rule-based
+./venv/bin/python -m claim_orchestrator run --contract challenge/current/contract.toml --provider rule-based
 ```
 
 ### Upgrade to a hosted model if needed
 
 ```bash
 ./venv/bin/python -m pip install -e .[openai]
-./venv/bin/python -m hackerrank_orchestrator run --contract challenge/current/contract.toml --provider openai --model gpt-4.1-mini
+./venv/bin/python -m claim_orchestrator run --contract challenge/current/contract.toml --provider openai --model gpt-4.1-mini
 ```
 
 ## How to think about output fields

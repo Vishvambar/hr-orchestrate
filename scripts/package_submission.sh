@@ -76,7 +76,7 @@ if [ -n "$LATEST_RUN" ]; then
   fi
 fi
 
-CHAT_LOG="$HOME/hackerrank_orchestrator/log.txt"
+CHAT_LOG="$HOME/claim_orchestrator/log.txt"
 if [ -f "$CHAT_LOG" ]; then
   cp "$CHAT_LOG" "$DEST/ai_chat_transcript.log"
 fi

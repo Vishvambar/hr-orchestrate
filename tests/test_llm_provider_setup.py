@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from hackerrank_orchestrator.llm import ProviderError, make_provider
+from claim_orchestrator.llm import ProviderError, make_provider
 
 
 class ProviderSetupTests(unittest.TestCase):

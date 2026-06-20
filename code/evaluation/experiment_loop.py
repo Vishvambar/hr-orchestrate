@@ -17,8 +17,8 @@ if str(SRC_ROOT) not in sys.path:
 from evaluation.main import _sample_contract_text  # noqa: E402
 from main import _find_dataset_dir  # noqa: E402
 
-from hackerrank_orchestrator.claim_review_pipeline import run_claim_review  # noqa: E402
-from hackerrank_orchestrator.utils import stable_json  # noqa: E402
+from claim_orchestrator.claim_review_pipeline import run_claim_review  # noqa: E402
+from claim_orchestrator.utils import stable_json  # noqa: E402
 
 VARIANTS: dict[str, dict[str, str]] = {
     "baseline": {

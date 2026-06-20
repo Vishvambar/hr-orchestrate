@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hackerrank-orchestrator-starter"
+name = "claim-orchestrator-starter"
 version = "0.1.0"
 description = "Hackathon-ready starter for HackerRank Orchestrate"
 readme = "README.md"
@@ -16,7 +16,7 @@ anthropic = ["anthropic>=0.57.0"]
 dev = ["pytest>=8.4.0", "ruff>=0.12.0"]
 
 [project.scripts]
-hko = "hackerrank_orchestrator.cli:main"
+hko = "claim_orchestrator.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

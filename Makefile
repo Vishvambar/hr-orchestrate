@@ -6,10 +6,10 @@ install:
 	$(PY) -m pip install -e .
 
 demo:
-	$(PY) -m hackerrank_orchestrator demo
+	$(PY) -m claim_orchestrator demo
 
 inspect-demo:
-	$(PY) -m hackerrank_orchestrator inspect --contract examples/demo_challenge/contract.toml --query "I was charged twice for my plan"
+	$(PY) -m claim_orchestrator inspect --contract examples/demo_challenge/contract.toml --query "I was charged twice for my plan"
 
 test:
 	$(PY) -m unittest discover -s tests -p 'test_*.py'
