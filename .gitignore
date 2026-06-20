@@ -23,5 +23,12 @@ challenge/archive/*
 challenge/current/*
 !challenge/current/README.md
 !challenge/current/*.toml
-docs/*
-submissions/*
+
+# Added ignores
+/log.txt
+/output.csv
+/dataset/output.csv
+/code.zip
+.DS_Store
+.orchestrate_image_cache/
+/code/artifacts/runs/
